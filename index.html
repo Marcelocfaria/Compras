@@ -53,18 +53,39 @@ nav.tabs button.active{color:var(--accent);font-weight:600;}
 .catrow{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);}
 .catrow:last-child{border-bottom:none;}
 .badge{background:#fff;color:var(--accent-d);border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:700;margin-left:8px;}
+html{-webkit-text-size-adjust:100%;}
+body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none;}
+header{display:flex;align-items:center;justify-content:space-between;}
+button,.chip,.catrow,.item{touch-action:manipulation;-webkit-user-select:none;user-select:none;transition:transform .08s,background .15s;}
+button:active,.chip:active,.catrow:active,.item:active{transform:scale(.97);}
+.item{min-height:52px;cursor:pointer;}
+.item span.name{padding:8px 0;font-size:1.03rem;}
+.iconbtn{min-width:44px;min-height:44px;}
+input[type=checkbox]{width:24px;height:24px;}
+.chip{padding:8px 8px 8px 14px;font-size:.92rem;cursor:pointer;}
+.chip.added{opacity:.55;}
+.chip button{width:28px;height:28px;}
+.catrow{min-height:54px;cursor:pointer;}
+.catrow.added .name{color:var(--muted);}
+.catrow .state{font-size:.78rem;color:var(--accent);font-weight:600;}
+.sugrow{display:flex;flex-wrap:wrap;margin-top:8px;}
+.sugrow:empty{display:none;}
+#toast{position:fixed;left:50%;bottom:calc(74px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:#4a2233;color:#fff;padding:11px 18px;border-radius:999px;font-size:.92rem;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;display:flex;gap:14px;align-items:center;max-width:92%;}
+#toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+#toast button{background:none;color:#f9a8d4;padding:4px 0;font-weight:700;}
 </style>
 </head>
 <body>
-<header><h1>🐱 Lista de Compras <span id="countBadge" class="badge" style="display:none"></span></h1></header>
+<header><h1>🐱 Lista de Compras <span id="countBadge" class="badge" style="display:none"></span></h1><button id="btnSound" class="iconbtn" style="color:#fff" aria-label="Som e vibração">🔊</button></header>
 <main>
 
   <section id="view-lista" class="view active">
     <div class="card">
       <div class="addrow">
-        <input id="newItemInput" list="catalogNames" placeholder="Adicionar item...">
-        <button class="btn-primary" id="btnAdd">+</button>
+        <input id="newItemInput" placeholder="Adicionar item..." autocomplete="off" enterkeyhint="done" autocapitalize="sentences">
+        <button class="btn-primary" id="btnAdd" aria-label="Adicionar" style="min-width:52px;font-size:20px">+</button>
       </div>
+      <div class="sugrow" id="sugRow"></div>
       <datalist id="catalogNames"></datalist>
     </div>
     <div class="card" id="listCard"></div>
@@ -99,6 +120,7 @@ nav.tabs button.active{color:var(--accent);font-weight:600;}
   <button class="tab" data-view="itens"><span class="ic">🧶</span>Itens</button>
 </nav>
 
+<div id="toast" role="status"></div>
 <script>
 const CATS = ["Hortifruti","Padaria","Laticínios/Frios","Carnes/Ovos","Mercearia","Limpeza","Higiene","Bebidas","Outros"];
 const DEFAULT_CATALOG = [
@@ -118,6 +140,49 @@ const DEFAULT_CATALOG = [
 ["Papel toalha","Outros"],["Guardanapo","Outros"],["Fósforo","Outros"],["Pilhas","Outros"]
 ];
 function slug(s){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");}
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function norm(s){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+let soundOn = true;
+try{ soundOn = localStorage.getItem("listaSom")!=="off"; }catch(e){}
+let actx = null;
+function unlockAudio(){
+  try{
+    if(!actx){ const AC=window.AudioContext||window.webkitAudioContext; if(AC) actx=new AC(); }
+    if(actx && actx.state==="suspended") actx.resume();
+  }catch(e){}
+}
+["touchstart","pointerdown","keydown"].forEach(ev=>document.addEventListener(ev,unlockAudio,{passive:true}));
+function tone(freq,start,dur,type="sine",vol=.12){
+  if(!actx) return;
+  const t=actx.currentTime+start, o=actx.createOscillator(), g=actx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+dur+.02);
+}
+const SFX={
+  add:()=>{tone(660,0,.09);tone(880,.07,.13);},
+  check:()=>tone(784,0,.1,"triangle"),
+  uncheck:()=>tone(440,0,.09,"triangle"),
+  remove:()=>{tone(330,0,.09);tone(220,.07,.13);},
+  done:()=>{[523,659,784,1047].forEach((f,i)=>tone(f,i*.09,.18,"triangle"));},
+  tab:()=>tone(600,0,.04,"sine",.06),
+  dup:()=>{tone(300,0,.08,"square",.04);tone(300,.11,.08,"square",.04);}
+};
+function sfx(name,vib){
+  if(!soundOn) return;
+  if(SFX[name]) SFX[name]();
+  if(vib && navigator.vibrate){ try{navigator.vibrate(vib);}catch(e){} }
+}
+function updateSoundBtn(){ document.getElementById("btnSound").textContent = soundOn ? "🔊" : "🔇"; }
+let toastT;
+function toast(msg,undoFn){
+  const t=document.getElementById("toast"); t.innerHTML="";
+  const sp=document.createElement("span"); sp.textContent=msg; t.appendChild(sp);
+  if(undoFn){ const b=document.createElement("button"); b.textContent="Desfazer"; b.onclick=()=>{undoFn();t.classList.remove("show");}; t.appendChild(b); }
+  t.classList.add("show"); clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove("show"), undoFn?4000:1600);
+}
 
 let state = null;
 const STORAGE_KEY = "listaComprasState";
@@ -146,6 +211,7 @@ function loadState(){
 
 function init(){
   state = loadState();
+  updateSoundBtn();
   renderAll();
 }
 
@@ -164,44 +230,57 @@ function findCatalogByName(name){
   return state.catalog.find(i=>i.name.toLowerCase()===n);
 }
 
+function inCurrent(name){ return state.current.some(i=>i.name.toLowerCase()===name.trim().toLowerCase()); }
+function refreshViews(){ renderList(); renderCatalog(); renderHistory(); renderSuggestions(); }
+
 function addToCurrent(name, cat){
-  name = name.trim(); if(!name) return;
-  if(state.current.some(i=>i.name.toLowerCase()===name.toLowerCase())) return;
+  name = name.trim(); if(!name) return false;
+  if(inCurrent(name)){ sfx("dup",[20,40,20]); toast("Já está na lista"); return false; }
   state.current.push({name, cat: cat || "Outros", checked:false});
   if(!findCatalogByName(name)) state.catalog.push({id:slug(name)+"-"+Date.now(), name, cat: cat || "Outros"});
-  persist(); renderList(); renderCatalog(); renderCatalogNames();
+  persist(); renderCatalogNames(); refreshViews();
+  sfx("add",15); toast("✓ "+name+" adicionado");
+  return true;
 }
 
 function renderList(){
   const box = document.getElementById("listCard");
   const badge = document.getElementById("countBadge");
-  if(state.current.length===0){ box.innerHTML = '<div class="empty">🐱 Sua lista está vazia.<br>Adicione itens acima ou pelo Histórico/Itens.</div>'; badge.style.display="none"; }
+  if(state.current.length===0){ box.innerHTML = '<div class="empty">🐱 Sua lista está vazia.<br>Adicione itens acima ou toque em qualquer item do Histórico/Itens.</div>'; badge.style.display="none"; }
   else{
     badge.style.display="inline-block"; badge.textContent = state.current.length;
     const byCat = {};
     state.current.forEach((it,idx)=>{ (byCat[it.cat] = byCat[it.cat]||[]).push({...it, idx}); });
     box.innerHTML = Object.keys(byCat).sort().map(cat=>`
-      <div class="group-title">${cat}</div>
+      <div class="group-title">${esc(cat)}</div>
       ${byCat[cat].map(it=>`
-        <div class="item ${it.checked?"checked":""}">
-          <input type="checkbox" ${it.checked?"checked":""} onchange="toggleItem(${it.idx})">
-          <span class="name">${it.name}</span>
-          <button class="iconbtn" onclick="removeCurrent(${it.idx})">✕</button>
+        <div class="item ${it.checked?"checked":""}" data-idx="${it.idx}">
+          <input type="checkbox" ${it.checked?"checked":""} tabindex="-1" style="pointer-events:none">
+          <span class="name">${esc(it.name)}</span>
+          <button class="iconbtn" aria-label="Remover">✕</button>
         </div>`).join("")}
     `).join("");
   }
   document.getElementById("btnFinalizar").disabled = !state.current.some(i=>i.checked);
 }
 
-function toggleItem(idx){ state.current[idx].checked = !state.current[idx].checked; persist(); renderList(); }
-function removeCurrent(idx){ state.current.splice(idx,1); persist(); renderList(); }
+function toggleItem(idx){
+  const it = state.current[idx]; if(!it) return;
+  it.checked = !it.checked; persist(); renderList();
+  sfx(it.checked?"check":"uncheck", 10);
+}
+function removeCurrent(idx){
+  const it = state.current[idx]; if(!it) return;
+  state.current.splice(idx,1); persist(); refreshViews(); sfx("remove",15);
+  toast("Removido: "+it.name, ()=>{ state.current.splice(idx,0,it); persist(); refreshViews(); sfx("add"); });
+}
 
 function finalizarCompra(){
   const bought = state.current.filter(i=>i.checked);
   if(bought.length===0) return;
   state.history.unshift({ date: new Date().toISOString(), items: bought.map(i=>({name:i.name, cat:i.cat})) });
   state.current = state.current.filter(i=>!i.checked);
-  persist(); renderList(); renderHistory();
+  persist(); refreshViews(); sfx("done",[30,50,30]); toast("🎉 Compra finalizada!");
 }
 
 function fmtDate(iso){
@@ -209,24 +288,26 @@ function fmtDate(iso){
   return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
 }
 
+function chipHTML(name,cat){
+  const on = inCurrent(name);
+  return `<span class="chip${on?" added":""}" data-add data-name="${esc(name)}" data-cat="${esc(cat)}">${esc(name)}<button tabindex="-1" aria-label="Adicionar">${on?"✓":"+"}</button></span>`;
+}
+
 function renderHistory(){
   const hc = document.getElementById("historyCard");
   if(state.history.length===0){ hc.innerHTML = '<div class="empty">🐈 Nenhuma compra finalizada ainda.</div>'; }
   else{
-    hc.innerHTML = state.history.slice(0,30).map((s,si)=>`
+    hc.innerHTML = state.history.slice(0,30).map(s=>`
       <div class="session">
         <div class="session-date">${fmtDate(s.date)} · ${s.items.length} ${s.items.length===1?"item":"itens"}</div>
-        <div class="quickrow">
-          ${s.items.map(it=>`<span class="chip">${it.name}<button onclick='addToCurrent(${JSON.stringify(it.name)},${JSON.stringify(it.cat)})'>+</button></span>`).join("")}
-        </div>
+        <div class="quickrow">${s.items.map(it=>chipHTML(it.name,it.cat)).join("")}</div>
       </div>`).join("");
   }
   const recent = {};
   state.history.slice(0,3).forEach(s=>s.items.forEach(it=>{ recent[it.name] = it.cat; }));
   const names = Object.keys(recent);
-  const qr = document.getElementById("quickAddRow");
-  qr.innerHTML = names.length===0 ? '<span class="hint">🐾 Suas últimas compras aparecerão aqui.</span>' :
-    names.map(n=>`<span class="chip">${n}<button onclick='addToCurrent(${JSON.stringify(n)},${JSON.stringify(recent[n])})'>+</button></span>`).join("");
+  document.getElementById("quickAddRow").innerHTML = names.length===0 ? '<span class="hint">🐾 Suas últimas compras aparecerão aqui.</span>' :
+    names.map(n=>chipHTML(n,recent[n])).join("");
 }
 
 function renderCatalog(){
@@ -234,42 +315,83 @@ function renderCatalog(){
   const byCat = {};
   state.catalog.forEach((it,idx)=>{ (byCat[it.cat]=byCat[it.cat]||[]).push({...it, idx}); });
   cc.innerHTML = CATS.filter(c=>byCat[c]).map(cat=>`
-    <div class="group-title">${cat}</div>
-    ${byCat[cat].map(it=>`
-      <div class="catrow">
-        <span class="name" style="flex:1">${it.name}</span>
-        <button class="iconbtn" style="color:var(--accent)" onclick='addToCurrent(${JSON.stringify(it.name)},${JSON.stringify(it.cat)})'>＋</button>
-        <button class="iconbtn" style="color:var(--danger)" onclick="removeCatalog(${it.idx})">🗑</button>
-      </div>`).join("")}
+    <div class="group-title">${esc(cat)}</div>
+    ${byCat[cat].map(it=>{ const on=inCurrent(it.name); return `
+      <div class="catrow${on?" added":""}" data-add data-name="${esc(it.name)}" data-cat="${esc(it.cat)}">
+        <span class="name" style="flex:1">${esc(it.name)}</span>
+        <span class="state">${on?"✓ na lista":"＋ adicionar"}</span>
+        <button class="iconbtn" style="color:var(--danger)" data-del="${it.idx}" aria-label="Excluir">🗑</button>
+      </div>`; }).join("")}
   `).join("") || '<div class="empty">🐱 Nenhum item cadastrado.</div>';
 }
 
-function removeCatalog(idx){ state.catalog.splice(idx,1); persist(); renderCatalog(); renderCatalogNames(); }
+function removeCatalog(idx){
+  const it = state.catalog[idx]; if(!it) return;
+  state.catalog.splice(idx,1); persist(); renderCatalog(); renderCatalogNames(); sfx("remove",15);
+  toast("Excluído: "+it.name, ()=>{ state.catalog.splice(idx,0,it); persist(); renderCatalog(); renderCatalogNames(); sfx("add"); });
+}
 
-document.getElementById("btnAdd").addEventListener("click", ()=>{
-  const inp = document.getElementById("newItemInput");
-  const match = findCatalogByName(inp.value);
-  addToCurrent(inp.value, match ? match.cat : "Outros");
+function renderSuggestions(){
+  const q = norm(document.getElementById("newItemInput").value.trim());
+  const box = document.getElementById("sugRow");
+  if(!q){ box.innerHTML=""; return; }
+  box.innerHTML = state.catalog.filter(i=>norm(i.name).includes(q) && !inCurrent(i.name)).slice(0,8).map(i=>chipHTML(i.name,i.cat)).join("");
+}
+
+const inp = document.getElementById("newItemInput");
+function submitInput(){
+  const v = inp.value; if(!v.trim()) return;
+  const match = findCatalogByName(v);
   inp.value = "";
-});
-document.getElementById("newItemInput").addEventListener("keydown", e=>{ if(e.key==="Enter") document.getElementById("btnAdd").click(); });
+  addToCurrent(v, match ? match.cat : "Outros");
+  renderSuggestions(); inp.focus();
+}
+document.getElementById("btnAdd").addEventListener("click", submitInput);
+inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); submitInput(); } });
+inp.addEventListener("input", renderSuggestions);
 document.getElementById("btnFinalizar").addEventListener("click", finalizarCompra);
+document.getElementById("btnSound").addEventListener("click", ()=>{
+  soundOn = !soundOn;
+  try{ localStorage.setItem("listaSom", soundOn?"on":"off"); }catch(e){}
+  updateSoundBtn(); unlockAudio();
+  if(soundOn) sfx("add",10); else toast("Som e vibração desligados");
+});
 document.getElementById("btnCatAdd").addEventListener("click", ()=>{
-  const name = document.getElementById("catName").value.trim();
+  const nameEl = document.getElementById("catName");
+  const name = nameEl.value.trim();
   const cat = document.getElementById("catCat").value;
   if(!name) return;
-  if(findCatalogByName(name)) { document.getElementById("catName").value=""; return; }
+  nameEl.value = "";
+  if(findCatalogByName(name)){ sfx("dup",[20,40,20]); toast("Esse item já existe"); return; }
   state.catalog.push({id:slug(name)+"-"+Date.now(), name, cat});
   persist(); renderCatalog(); renderCatalogNames();
-  document.getElementById("catName").value = "";
+  sfx("add",15); toast("✓ "+name+" cadastrado");
+});
+
+/* Toque em qualquer parte do item (chip ou linha) adiciona à lista */
+document.addEventListener("click", e=>{
+  const del = e.target.closest("[data-del]");
+  if(del){ removeCatalog(+del.dataset.del); return; }
+  const el = e.target.closest("[data-add]");
+  if(!el) return;
+  const ok = addToCurrent(el.dataset.name, el.dataset.cat);
+  if(ok && el.closest("#sugRow")){ inp.value=""; renderSuggestions(); }
+});
+/* Toque em qualquer parte da linha marca/desmarca; ✕ remove */
+document.getElementById("listCard").addEventListener("click", e=>{
+  const row = e.target.closest(".item"); if(!row) return;
+  const idx = +row.dataset.idx;
+  if(e.target.closest(".iconbtn")) removeCurrent(idx); else toggleItem(idx);
 });
 
 document.querySelectorAll("nav.tabs .tab").forEach(btn=>{
   btn.addEventListener("click", ()=>{
+    if(btn.classList.contains("active")) return;
     document.querySelectorAll("nav.tabs .tab").forEach(b=>b.classList.remove("active"));
     document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("view-"+btn.dataset.view).classList.add("active");
+    window.scrollTo(0,0); sfx("tab",5);
   });
 });
 
