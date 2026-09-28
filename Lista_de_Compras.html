@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lista de Compras</title>
+<style>
+:root{
+  --bg:#fff0f5; --card:#ffffff; --text:#4a2233; --muted:#a4677f; --border:#f4cfe0;
+  --accent:#ec4899; --accent-d:#be185d; --danger:#e11d48; --chip:#fce7f3;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#241019; --card:#331a26; --text:#fbe4ef; --muted:#d19bb5; --border:#4d2436; --chip:#4d2436; }
+}
+:root[data-theme="dark"]{ --bg:#241019; --card:#331a26; --text:#fbe4ef; --muted:#d19bb5; --border:#4d2436; --chip:#4d2436; }
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom,0px));}
+header{position:sticky;top:0;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 12px;background:linear-gradient(135deg,#f472b6,#ec4899 60%,#db2777);color:#fff;z-index:5;}
+header h1{margin:0;font-size:1.15rem;font-weight:700;}
+main{max-width:520px;margin:0 auto;padding:14px 12px 12px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px;}
+.addrow{display:flex;gap:8px;}
+input,select{font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);width:100%;}
+button{font-size:15px;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:disabled{opacity:.4;}
+.iconbtn{background:transparent;color:var(--muted);padding:6px 8px;font-size:18px;line-height:1;}
+.group-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 6px;}
+.group-title:first-child{margin-top:0;}
+.item{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border);}
+.item:last-child{border-bottom:none;}
+.item span.name{flex:1;}
+.item.checked span.name{text-decoration:line-through;color:var(--muted);}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);}
+.empty{color:var(--muted);text-align:center;padding:24px 8px;font-size:.9rem;}
+.session{margin-bottom:14px;}
+.session-date{font-weight:600;font-size:.85rem;margin-bottom:6px;color:var(--muted);}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border-radius:999px;padding:5px 6px 5px 12px;margin:0 6px 6px 0;font-size:.85rem;}
+.chip button{background:var(--accent);color:#fff;border-radius:999px;width:24px;height:24px;padding:0;font-size:15px;}
+.quickrow{display:flex;flex-wrap:wrap;margin-top:4px;}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--border);
+  padding-bottom:env(safe-area-inset-bottom,0px);z-index:5;}
+nav.tabs button{flex:1;background:none;border-radius:0;padding:10px 4px 8px;color:var(--muted);font-size:.72rem;display:flex;flex-direction:column;align-items:center;gap:2px;}
+nav.tabs button .ic{font-size:1.25rem;}
+nav.tabs button.active{color:var(--accent);font-weight:600;}
+.view{display:none;}
+.view.active{display:block;}
+.hint{font-size:.78rem;color:var(--muted);margin-top:6px;}
+.catrow{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);}
+.catrow:last-child{border-bottom:none;}
+.badge{background:#fff;color:var(--accent-d);border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:700;margin-left:8px;}
+</style>
+</head>
+<body>
+<header><h1>🐱 Lista de Compras <span id="countBadge" class="badge" style="display:none"></span></h1></header>
+<main>
+
+  <section id="view-lista" class="view active">
+    <div class="card">
+      <div class="addrow">
+        <input id="newItemInput" list="catalogNames" placeholder="Adicionar item...">
+        <button class="btn-primary" id="btnAdd">+</button>
+      </div>
+      <datalist id="catalogNames"></datalist>
+    </div>
+    <div class="card" id="listCard"></div>
+    <button class="btn-primary" id="btnFinalizar" style="width:100%;padding:13px;font-weight:600" disabled>🐾 Finalizar compra</button>
+  </section>
+
+  <section id="view-historico" class="view">
+    <div class="card">
+      <div class="group-title">Adicionar rápido (últimas compras)</div>
+      <div class="quickrow" id="quickAddRow"></div>
+    </div>
+    <div class="card" id="historyCard"></div>
+  </section>
+
+  <section id="view-itens" class="view">
+    <div class="card">
+      <div class="group-title">Novo item</div>
+      <div class="addrow">
+        <input id="catName" placeholder="Nome do item">
+        <select id="catCat"></select>
+      </div>
+      <button class="btn-primary" id="btnCatAdd" style="width:100%;margin-top:8px">Cadastrar item</button>
+    </div>
+    <div class="card" id="catalogCard"></div>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button class="tab active" data-view="lista"><span class="ic">🐾</span>Lista</button>
+  <button class="tab" data-view="historico"><span class="ic">🐈</span>Histórico</button>
+  <button class="tab" data-view="itens"><span class="ic">🧶</span>Itens</button>
+</nav>
+
+<script>
+const CATS = ["Hortifruti","Padaria","Laticínios/Frios","Carnes/Ovos","Mercearia","Limpeza","Higiene","Bebidas","Outros"];
+const DEFAULT_CATALOG = [
+["Banana","Hortifruti"],["Maçã","Hortifruti"],["Tomate","Hortifruti"],["Cebola","Hortifruti"],["Batata","Hortifruti"],
+["Alface","Hortifruti"],["Limão","Hortifruti"],["Cenoura","Hortifruti"],
+["Pão de forma","Padaria"],["Pão francês","Padaria"],
+["Leite","Laticínios/Frios"],["Queijo","Laticínios/Frios"],["Manteiga","Laticínios/Frios"],["Iogurte","Laticínios/Frios"],
+["Requeijão","Laticínios/Frios"],["Presunto","Laticínios/Frios"],
+["Frango","Carnes/Ovos"],["Carne moída","Carnes/Ovos"],["Ovos","Carnes/Ovos"],["Peixe","Carnes/Ovos"],
+["Arroz","Mercearia"],["Feijão","Mercearia"],["Açúcar","Mercearia"],["Sal","Mercearia"],["Óleo de soja","Mercearia"],
+["Café","Mercearia"],["Macarrão","Mercearia"],["Farinha de trigo","Mercearia"],["Molho de tomate","Mercearia"],
+["Detergente","Limpeza"],["Sabão em pó","Limpeza"],["Amaciante","Limpeza"],["Desinfetante","Limpeza"],
+["Papel higiênico","Limpeza"],["Esponja de aço","Limpeza"],["Água sanitária","Limpeza"],
+["Sabonete","Higiene"],["Shampoo","Higiene"],["Condicionador","Higiene"],["Creme dental","Higiene"],
+["Escova de dente","Higiene"],["Desodorante","Higiene"],
+["Água mineral","Bebidas"],["Suco","Bebidas"],["Refrigerante","Bebidas"],
+["Papel toalha","Outros"],["Guardanapo","Outros"],["Fósforo","Outros"],["Pilhas","Outros"]
+];
+function slug(s){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");}
+
+let state = null;
+const STORAGE_KEY = "listaComprasState";
+
+function defaultState(){
+  return { catalog: DEFAULT_CATALOG.map(([name,cat])=>({id:slug(name),name,cat})), current: [], history: [] };
+}
+
+function persist(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(e){
+    console.warn("Não foi possível salvar os dados (localStorage indisponível):", e);
+  }
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : defaultState();
+  }catch(e){
+    console.warn("Não foi possível carregar os dados salvos, iniciando do zero:", e);
+    return defaultState();
+  }
+}
+
+function init(){
+  state = loadState();
+  renderAll();
+}
+
+function renderAll(){ renderCatalogSelect(); renderCatalogNames(); renderList(); renderCatalog(); renderHistory(); }
+
+function renderCatalogSelect(){
+  const sel = document.getElementById("catCat");
+  sel.innerHTML = CATS.map(c=>`<option>${c}</option>`).join("");
+}
+function renderCatalogNames(){
+  document.getElementById("catalogNames").innerHTML = state.catalog.map(i=>`<option value="${i.name}">`).join("");
+}
+
+function findCatalogByName(name){
+  const n = name.trim().toLowerCase();
+  return state.catalog.find(i=>i.name.toLowerCase()===n);
+}
+
+function addToCurrent(name, cat){
+  name = name.trim(); if(!name) return;
+  if(state.current.some(i=>i.name.toLowerCase()===name.toLowerCase())) return;
+  state.current.push({name, cat: cat || "Outros", checked:false});
+  if(!findCatalogByName(name)) state.catalog.push({id:slug(name)+"-"+Date.now(), name, cat: cat || "Outros"});
+  persist(); renderList(); renderCatalog(); renderCatalogNames();
+}
+
+function renderList(){
+  const box = document.getElementById("listCard");
+  const badge = document.getElementById("countBadge");
+  if(state.current.length===0){ box.innerHTML = '<div class="empty">🐱 Sua lista está vazia.<br>Adicione itens acima ou pelo Histórico/Itens.</div>'; badge.style.display="none"; }
+  else{
+    badge.style.display="inline-block"; badge.textContent = state.current.length;
+    const byCat = {};
+    state.current.forEach((it,idx)=>{ (byCat[it.cat] = byCat[it.cat]||[]).push({...it, idx}); });
+    box.innerHTML = Object.keys(byCat).sort().map(cat=>`
+      <div class="group-title">${cat}</div>
+      ${byCat[cat].map(it=>`
+        <div class="item ${it.checked?"checked":""}">
+          <input type="checkbox" ${it.checked?"checked":""} onchange="toggleItem(${it.idx})">
+          <span class="name">${it.name}</span>
+          <button class="iconbtn" onclick="removeCurrent(${it.idx})">✕</button>
+        </div>`).join("")}
+    `).join("");
+  }
+  document.getElementById("btnFinalizar").disabled = !state.current.some(i=>i.checked);
+}
+
+function toggleItem(idx){ state.current[idx].checked = !state.current[idx].checked; persist(); renderList(); }
+function removeCurrent(idx){ state.current.splice(idx,1); persist(); renderList(); }
+
+function finalizarCompra(){
+  const bought = state.current.filter(i=>i.checked);
+  if(bought.length===0) return;
+  state.history.unshift({ date: new Date().toISOString(), items: bought.map(i=>({name:i.name, cat:i.cat})) });
+  state.current = state.current.filter(i=>!i.checked);
+  persist(); renderList(); renderHistory();
+}
+
+function fmtDate(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
+}
+
+function renderHistory(){
+  const hc = document.getElementById("historyCard");
+  if(state.history.length===0){ hc.innerHTML = '<div class="empty">🐈 Nenhuma compra finalizada ainda.</div>'; }
+  else{
+    hc.innerHTML = state.history.slice(0,30).map((s,si)=>`
+      <div class="session">
+        <div class="session-date">${fmtDate(s.date)} · ${s.items.length} ${s.items.length===1?"item":"itens"}</div>
+        <div class="quickrow">
+          ${s.items.map(it=>`<span class="chip">${it.name}<button onclick='addToCurrent(${JSON.stringify(it.name)},${JSON.stringify(it.cat)})'>+</button></span>`).join("")}
+        </div>
+      </div>`).join("");
+  }
+  const recent = {};
+  state.history.slice(0,3).forEach(s=>s.items.forEach(it=>{ recent[it.name] = it.cat; }));
+  const names = Object.keys(recent);
+  const qr = document.getElementById("quickAddRow");
+  qr.innerHTML = names.length===0 ? '<span class="hint">🐾 Suas últimas compras aparecerão aqui.</span>' :
+    names.map(n=>`<span class="chip">${n}<button onclick='addToCurrent(${JSON.stringify(n)},${JSON.stringify(recent[n])})'>+</button></span>`).join("");
+}
+
+function renderCatalog(){
+  const cc = document.getElementById("catalogCard");
+  const byCat = {};
+  state.catalog.forEach((it,idx)=>{ (byCat[it.cat]=byCat[it.cat]||[]).push({...it, idx}); });
+  cc.innerHTML = CATS.filter(c=>byCat[c]).map(cat=>`
+    <div class="group-title">${cat}</div>
+    ${byCat[cat].map(it=>`
+      <div class="catrow">
+        <span class="name" style="flex:1">${it.name}</span>
+        <button class="iconbtn" style="color:var(--accent)" onclick='addToCurrent(${JSON.stringify(it.name)},${JSON.stringify(it.cat)})'>＋</button>
+        <button class="iconbtn" style="color:var(--danger)" onclick="removeCatalog(${it.idx})">🗑</button>
+      </div>`).join("")}
+  `).join("") || '<div class="empty">🐱 Nenhum item cadastrado.</div>';
+}
+
+function removeCatalog(idx){ state.catalog.splice(idx,1); persist(); renderCatalog(); renderCatalogNames(); }
+
+document.getElementById("btnAdd").addEventListener("click", ()=>{
+  const inp = document.getElementById("newItemInput");
+  const match = findCatalogByName(inp.value);
+  addToCurrent(inp.value, match ? match.cat : "Outros");
+  inp.value = "";
+});
+document.getElementById("newItemInput").addEventListener("keydown", e=>{ if(e.key==="Enter") document.getElementById("btnAdd").click(); });
+document.getElementById("btnFinalizar").addEventListener("click", finalizarCompra);
+document.getElementById("btnCatAdd").addEventListener("click", ()=>{
+  const name = document.getElementById("catName").value.trim();
+  const cat = document.getElementById("catCat").value;
+  if(!name) return;
+  if(findCatalogByName(name)) { document.getElementById("catName").value=""; return; }
+  state.catalog.push({id:slug(name)+"-"+Date.now(), name, cat});
+  persist(); renderCatalog(); renderCatalogNames();
+  document.getElementById("catName").value = "";
+});
+
+document.querySelectorAll("nav.tabs .tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("nav.tabs .tab").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("view-"+btn.dataset.view).classList.add("active");
+  });
+});
+
+init();
+</script>
+</body>
+</html>
